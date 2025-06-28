@@ -4,7 +4,7 @@ This project focuses on monitoring and predicting forest regeneration and encroa
 
 📂 Dataset
 
-Due to GitHub's file size limitations, the full dataset (\~40 GB) has been uploaded externally and can be accessed [**here**](#) *(insert Google Drive / Dropbox / Zenodo link)*.
+Due to GitHub's file size limitations, the full dataset (\~40 GB) has been uploaded externally and can be accessed (https://drive.google.com/drive/folders/107v4QCFWR8yb6K4PIF4Z-uZRF9NEAHE4?usp=drive_link)
 The dataset consists of:
 
 * Multi-temporal satellite imagery (2011–2020)
