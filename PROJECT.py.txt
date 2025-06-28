@@ -1,0 +1,88 @@
+import rasterio
+import numpy as np
+import pandas as pd
+import os
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report
+
+# === STEP 1: Extract Pixel Values from Masked TIFFs ===
+folder_path = r"C:\Users\BHUVIN SAI\OneDrive\Desktop\nird\my final one"
+data = []
+
+for file in os.listdir(folder_path):
+    if file.endswith(".tif"):
+        year = file.split("-")[0]  # Assuming filename like '2015-masked.tif'
+        path = os.path.join(folder_path, file)
+
+        with rasterio.open(path) as src:
+            band = src.read(1)
+            transform = src.transform
+
+        # Only keep valid forest/non-forest pixels
+        rows, cols = np.where((band == 0) | (band == 1))
+        coords = [rasterio.transform.xy(transform, r, c) for r, c in zip(rows, cols)]
+        xs, ys = zip(*coords)
+        labels = band[rows, cols]
+
+        for x, y, label in zip(xs, ys, labels):
+            data.append([x, y, int(year), label])
+
+# Save extracted data
+df = pd.DataFrame(data, columns=["x", "y", "year", "label"])
+df.to_csv("forest_training_data.csv", index=False)
+
+# === STEP 2: Load Data ===
+df = pd.read_csv("forest_training_data.csv")
+
+# Optional: reduce memory if data is too large
+df = df.sample(n=500_000, random_state=42) if len(df) > 500_000 else df
+
+# === STEP 3: Feature Engineering ===
+df['xy_interaction'] = df['x'] * df['y']
+features = ['x', 'y', 'year', 'xy_interaction']
+X = df[features]
+y = df['label']
+
+# === STEP 4: Scale Features ===
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# === STEP 5: Train-Test Split ===
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42
+)
+
+# === STEP 6: Train Model ===
+model = HistGradientBoostingClassifier(
+    random_state=42,
+    max_iter=300,
+    max_leaf_nodes=64,
+    l2_regularization=0.1
+)
+model.fit(X_train, y_train)
+
+# === STEP 7: Evaluate ===
+y_pred = model.predict(X_test)
+print("\n=== Classification Report ===")
+print(classification_report(y_test, y_pred))
+
+# === STEP 8: Predict Forest Cover for 2021 ===
+unique_coords = df[['x', 'y']].drop_duplicates().copy()
+unique_coords['year'] = 2021
+unique_coords['xy_interaction'] = unique_coords['x'] * unique_coords['y']
+
+X_2021 = scaler.transform(unique_coords[features])
+y_2021_pred = model.predict(X_2021)
+unique_coords['predicted_label'] = y_2021_pred
+
+# === STEP 9: Forest Percentage ===
+forest_pixels = np.sum(y_2021_pred == 1)
+total_pixels = len(y_2021_pred)
+percentage_forest = (forest_pixels / total_pixels) * 100
+print(f"\n✅ Predicted Forest Cover for 2021: {percentage_forest:.2f}%")
+
+# === STEP 10: Save Prediction CSV ===
+unique_coords.to_csv("predicted_forest_2021.csv", index=False)
+print("✅ Saved to predicted_forest_2021.csv")

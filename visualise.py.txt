@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import rasterio
+from rasterio.transform import from_origin
+import os
+
+# === STEP 1: Load Prediction Data ===
+csv_path = "predicted_forest_2021.csv"
+df = pd.read_csv(csv_path)
+
+# Check for expected columns
+assert all(col in df.columns for col in ['x', 'y', 'predicted_label']), "CSV must contain x, y, predicted_label"
+
+# === OPTION 1: Scatter Plot ===
+plt.figure(figsize=(10, 8))
+plt.scatter(df['x'], df['y'], c=df['predicted_label'], cmap='Greens', s=1)
+plt.title("Predicted Forest Cover for 2021")
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
+plt.colorbar(label='Forest (1) / Non-Forest (0)')
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("forest_2021_visualization.png", dpi=300)
+plt.show()
+
+# === OPTION 2: Convert to Raster and Save GeoTIFF ===
+# Raster resolution in units of coordinate system (adjust based on your CRS)
+res = 30  # ~30 meters or adjust as needed
+
+# Bounds
+x_min, x_max = df['x'].min(), df['x'].max()
+y_min, y_max = df['y'].min(), df['y'].max()
+
+# Calculate raster size
+width = int(np.ceil((x_max - x_min) / res))
+height = int(np.ceil((y_max - y_min) / res))
+
+# Initialize empty raster
+raster = np.full((height, width), -1, dtype=np.uint8)
+
+# Map coordinates to raster grid
+for i, row in df.iterrows():
+    col = int((row['x'] - x_min) / res)
+    row_idx = int((y_max - row['y']) / res)
+    if 0 <= row_idx < height and 0 <= col < width:
+        raster[row_idx, col] = int(row['predicted_label'])
+
+# Define geotransform
+transform = from_origin(x_min, y_max, res, res)
+
+# Output file
+output_tif = "predicted_forest_2021.tif"
+
+# Save raster
+with rasterio.open(
+    output_tif,
+    'w',
+    driver='GTiff',
+    height=height,
+    width=width,
+    count=1,
+    dtype=raster.dtype,
+    crs='EPSG:4326',  # Use correct CRS if known (e.g., EPSG:32643 for UTM zone)
+    transform=transform,
+) as dst:
+    dst.write(raster, 1)
+
+print("\n✅ Visualization saved as 'forest_2021_visualization.png'")
+print("✅ GeoTIFF saved as 'predicted_forest_2021.tif'")
